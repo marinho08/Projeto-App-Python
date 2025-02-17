@@ -1,0 +1,203 @@
+import 'package:flutter/material.dart';
+import 'planet_database.dart'; // Importar a classe do banco de dados
+
+void main() {
+  runApp(PlanetApp());
+}
+
+class PlanetApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Cadastro de Planetas',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
+      ),
+      home: PlanetListScreen(),
+    );
+  }
+}
+
+class PlanetListScreen extends StatefulWidget {
+  @override
+  _PlanetListScreenState createState() => _PlanetListScreenState();
+}
+
+class _PlanetListScreenState extends State<PlanetListScreen> {
+  final PlanetDAO db = PlanetDAO();
+  List<Planet> planets = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPlanets();
+  }
+
+  Future<void> _loadPlanets() async {
+    planets = await db.getPlanets();
+    setState(() {});
+  }
+
+  void _addPlanet() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => PlanetFormScreen(onSave: (planet) {
+        db.addPlanet(planet);
+        _loadPlanets();
+      })),
+    );
+  }
+
+  void _editPlanet(Planet planet) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => PlanetFormScreen(
+        planet: planet,
+        onSave: (updatedPlanet) {
+          db.updatePlanet(updatedPlanet);
+          _loadPlanets();
+        },
+      )),
+    );
+  }
+
+  void _deletePlanet(int id) async {
+    bool confirmDelete = await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Confirmar Exclusão'),
+        content: Text('Tem certeza que deseja excluir este planeta?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirmDelete == true) {
+      await db.deletePlanet(id);
+      _loadPlanets();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Planetas Cadastrados')),
+      body: ListView.builder(
+        itemCount: planets.length,
+        itemBuilder: (context, index) {
+          final planet = planets[index];
+          return ListTile(
+            title: Text(planet.name),
+            subtitle: Text(planet.nickname ?? 'Sem apelido'),
+            onTap: () => _editPlanet(planet),
+            trailing: IconButton(
+              icon: Icon(Icons.delete, color: Colors.red),
+              onPressed: () => _deletePlanet(planet.id!),
+            ),
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _addPlanet,
+        child: Icon(Icons.add),
+      ),
+    );
+  }
+}
+
+class PlanetFormScreen extends StatefulWidget {
+  final Planet? planet;
+  final Function(Planet) onSave;
+
+  PlanetFormScreen({this.planet, required this.onSave});
+
+  @override
+  _PlanetFormScreenState createState() => _PlanetFormScreenState();
+}
+
+class _PlanetFormScreenState extends State<PlanetFormScreen> {
+  final _formKey = GlobalKey<FormState>();
+  late String _name;
+  late double _distance;
+  late double _size;
+  String? _nickname;
+
+  @override
+  void initState() {
+    super.initState();
+    _name = widget.planet?.name ?? '';
+    _distance = widget.planet?.distance ?? 0;
+    _size = widget.planet?.size ?? 0;
+    _nickname = widget.planet?.nickname;
+  }
+
+  void _submit() {
+    if (_formKey.currentState!.validate()) {
+      _formKey.currentState!.save();
+      widget.onSave(Planet(
+        id: widget.planet?.id,
+        name: _name,
+        distance: _distance,
+        size: _size,
+        nickname: _nickname,
+      ));
+      Navigator.pop(context);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.planet == null ? 'Adicionar Planeta' : 'Editar Planeta')),
+      body: Padding(
+        padding: EdgeInsets.all(16.0),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              TextFormField(
+                initialValue: _name,
+                decoration: InputDecoration(labelText: 'Nome do Planeta'),
+                validator: (value) => value!.isEmpty ? 'Informe o nome' : null,
+                onSaved: (value) => _name = value!,
+              ),
+              TextFormField(
+                initialValue: _distance.toString(),
+                decoration: InputDecoration(labelText: 'Distância do Sol (UA)'),
+                keyboardType: TextInputType.number,
+                validator: (value) => double.tryParse(value!) == null || double.parse(value) <= 0 ? 'Informe um valor positivo' : null,
+                onSaved: (value) => _distance = double.parse(value!),
+              ),
+              TextFormField(
+                initialValue: _size.toString(),
+                decoration: InputDecoration(labelText: 'Tamanho (km)'),
+                keyboardType: TextInputType.number,
+                validator: (value) => double.tryParse(value!) == null || double.parse(value) <= 0 ? 'Informe um valor positivo' : null,
+                onSaved: (value) => _size = double.parse(value!),
+              ),
+              TextFormField(
+                initialValue: _nickname,
+                decoration: InputDecoration(labelText: 'Apelido (opcional)'),
+                onSaved: (value) => _nickname = value,
+              ),
+              SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _submit,
+                child: Text('Salvar'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
