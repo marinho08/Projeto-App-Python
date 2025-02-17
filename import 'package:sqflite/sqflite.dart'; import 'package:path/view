@@ -1,0 +1,91 @@
+import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart';
+
+class Planet {
+  final int? id;
+  final String name;
+  final double distance;
+  final double size;
+  final String? nickname;
+
+  Planet({this.id, required this.name, required this.distance, required this.size, this.nickname});
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'distance': distance,
+      'size': size,
+      'nickname': nickname,
+    };
+  }
+
+  static Planet fromMap(Map<String, dynamic> map) {
+    return Planet(
+      id: map['id'],
+      name: map['name'],
+      distance: map['distance'],
+      size: map['size'],
+      nickname: map['nickname'],
+    );
+  }
+}
+
+class PlanetDAO {
+  static final PlanetDAO _instance = PlanetDAO._internal();
+  static Database? _database;
+
+  factory PlanetDAO() {
+    return _instance;
+  }
+
+  PlanetDAO._internal();
+
+  Future<Database> get database async {
+    if (_database != null) return _database!;
+    _database = await _initDB();
+    return _database!;
+  }
+
+  Future<Database> _initDB() async {
+    String path = join(await getDatabasesPath(), 'planets.db');
+    return await openDatabase(
+      path,
+      version: 1,
+      onCreate: (db, version) {
+        return db.execute('''
+          CREATE TABLE planets(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            distance REAL NOT NULL CHECK(distance > 0),
+            size REAL NOT NULL CHECK(size > 0),
+            nickname TEXT
+          )
+        ''');
+      },
+    );
+  }
+
+  Future<void> addPlanet(Planet planet) async {
+    final db = await database;
+    await db.insert('planets', planet.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<Planet>> getPlanets() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query('planets');
+    return List.generate(maps.length, (i) {
+      return Planet.fromMap(maps[i]);
+    });
+  }
+
+  Future<void> updatePlanet(Planet planet) async {
+    final db = await database;
+    await db.update('planets', planet.toMap(), where: 'id = ?', whereArgs: [planet.id]);
+  }
+
+  Future<void> deletePlanet(int id) async {
+    final db = await database;
+    await db.delete('planets', where: 'id = ?', whereArgs: [id]);
+  }
+}
